@@ -29,7 +29,6 @@ class AFM:
         self.file.close()
 
         file = open(f'{self.directory_name}/{self.filename}', 'r')
-
         self.image = np.loadtxt(file, skiprows=4, dtype=float)*1e9 # z data in nm
         file.close()
 
