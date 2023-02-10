@@ -14,12 +14,11 @@ from datetime import datetime
 import pathlib
 from tkinter import filedialog as fd
 
+# parameters for image correction can be added in the terminal as postional argument
 parser = argparse.ArgumentParser(description='Stream camera, take snapshot and evaluate color of hBN and substrate.')
-#parser.add_argument('-t', '--exposure_time', nargs=1, type=float, metavar='t_exp', help='Exposure Time in Microseconds')
 parser.add_argument('-a', '--gain', nargs=1, type=float, metavar='alpha', help='Gain in dB') # this is not in dB yet
 parser.add_argument('-b', '--bias', nargs=1, type=float, metavar='beta', help='Bias')
 parser.add_argument('-g', '--gamma', nargs=1, type=float, metavar='gamma', help='Gamma Correction')
-parser.add_argument('-d', '--description', nargs=1, type=str, help='Additional Description of Saved Files')
 args = parser.parse_args()
 
 # parameters for immage correction
