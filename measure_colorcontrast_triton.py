@@ -274,6 +274,8 @@ class LucidCamera:
             scalebar = ScaleBar(pixel_widths[self.mag-1], 'um', frameon=1) 
         else:
             scalebar = ScaleBar(pixel_widths[0], 'um', frameon=1) 
+        ax.set_xlabel(r'$x$/px')
+        ax.set_ylabel(r'$y$/px')
         ax.add_artist(scalebar)
         ax.set_title('Select rectangles for color contrast.\n Blue = hBN, green = substrate.')
         ax.imshow(self.image)
