@@ -184,8 +184,8 @@ class LucidCamera():
         self.initial_nodes = self.nodes
 
         # formatting
-        self.nodes['Width'].value = 1280
-        self.nodes['Height'].value = 720
+        self.nodes['Width'].value = 1936
+        self.nodes['Height'].value = 1464
         self.nodes['PixelFormat'].value = 'RGB8'
 
 
@@ -213,8 +213,8 @@ class LucidCamera():
         num_channels = 3 # depends on pixel format, for RGB -> 3
 
         # control panel of exposure time
-        expo_min = 1500
-        expo_max = 10000
+        expo_min = 1000
+        expo_max = 3000
 
 
         def _set_exposure_time(val: float):
