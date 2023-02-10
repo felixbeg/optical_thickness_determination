@@ -22,6 +22,7 @@ parser.add_argument('-g', '--gamma', nargs=1, type=float, metavar='gamma', help=
 parser.add_argument('-d', '--description', nargs=1, type=str, help='Additional Description of Saved Files')
 args = parser.parse_args()
 
+# parameters for immage correction
 if args.gain:
     alpha = args.gain[0]
 else:
@@ -85,13 +86,15 @@ end_points = lengths+start_point-linewidth/2
 
 
 class LucidCamera:
-    def __init__(self):
+    def __init__(self, stream=1):
         if args.gain:
             self.alpha = args.gain[0]
         if args.bias:
             self.beta = args.bias[0]
         if args.gamma:
             self.gamma = args.gamma[0]
+        self.stream = stream
+        self.path_results_folder = './measurements'
 
 
     # create device, waits 20 seconds for device to be connected
@@ -134,8 +137,8 @@ class LucidCamera:
         self.initial_nodes = self.nodes
 
         # formatting
-        self.nodes['Width'].value = 1280
-        self.nodes['Height'].value = 720
+        self.nodes['Width'].value = 1936
+        self.nodes['Height'].value = 1464
         self.nodes['PixelFormat'].value = 'RGB8'
 
 
@@ -190,10 +193,10 @@ class LucidCamera:
         print('Choose magnification with keys: \'1\', \'2\', \'3\', \'4\' or \'5\'.\n')
         with self.device.start_stream():
             while True:
-                # Used to display FPS on stream
-                curr_frame_time = time.time()
+                curr_frame_time = time.time() # Used to display FPS on stream
+                
+                # get image from camera
                 buffer = self.device.get_buffer()
-
                 item = BufferFactory.copy(buffer)
                 self.device.requeue_buffer(buffer)
                 buffer_bytes_per_pixel = int(len(item.data)/(item.width * item.height))
@@ -204,14 +207,14 @@ class LucidCamera:
                 # image correction
                 if args.gamma:
                     npndarray = gamma_correct(npndarray)
-
                 if args.gain or args.bias:
                     npndarray = adjust_contrast(npndarray)
 
+                # text to put on broadcasted image
                 max_R = np.amax(npndarray[:, :, 0])
                 max_G = np.amax(npndarray[:, :, 1])
                 max_B = np.amax(npndarray[:, :, 2])
-                npndarray = cv2.cvtColor(npndarray, cv2.COLOR_RGB2BGR)
+                npndarray = cv2.cvtColor(npndarray, cv2.COLOR_RGB2BGR) # convert for image to be shown correctly in cv2
                 fps = f'FPS: {1/(curr_frame_time-prev_frame_time):.1f}'
                 max = f'Max. (R, G, B): ({max_R:.0f}, {max_G:.0f}, {max_B:.0f})'
                 string = f'{scales[self.mag-1]} um ({10*objective[self.mag-1]}x magnification)'
@@ -221,10 +224,12 @@ class LucidCamera:
                 cv2.putText(npndarray, string, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv2.LINE_AA)
                 cv2.putText(npndarray, max, (10, 660), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv2.LINE_AA)
                 cv2.putText(npndarray, fps, (10, 700), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv2.LINE_AA)
+
+                # show image
                 cv2.imshow('Camera currently streaming, press \'s\'-key to stop stream/take snapshot.', npndarray)
 
+                # clean up
                 BufferFactory.destroy(item)
-
                 prev_frame_time = curr_frame_time
 
                 # Break if s-key (snapshot) is pressed
@@ -260,14 +265,16 @@ class LucidCamera:
         self.exposure_time = np.loadtxt(filename_txt, skiprows=1, max_rows=1)
 
     def Snap(self):
-        global stream
         # get last image of stream
         print("\nTaking snapshot.\n")
 
-        # what follows is the part for evaluation
+        # setup plot
         print('To break streaming-/snapping-loop, press \'b\'-key.')
         fig, ax = plt.subplots()
-        scalebar = ScaleBar(pixel_widths[self.mag-1], 'um', frameon=1) 
+        if self.stream:
+            scalebar = ScaleBar(pixel_widths[self.mag-1], 'um', frameon=1) 
+        else:
+            scalebar = ScaleBar(pixel_widths[0], 'um', frameon=1) 
         ax.add_artist(scalebar)
         ax.set_title('Select rectangles for color contrast.\n Blue = hBN, green = substrate.')
         ax.imshow(self.image)
@@ -295,7 +302,6 @@ class LucidCamera:
                     
                     rect_hbn.set_active(False)
                     rect_sub.set_active(True)
-
                     self.hbn = False
                 else:
                     print(f'\n{name} for hBN activated.')
@@ -303,7 +309,6 @@ class LucidCamera:
                     
                     rect_hbn.set_active(True)
                     rect_sub.set_active(False)
-
                     self.hbn = True
             
 
@@ -317,13 +322,13 @@ class LucidCamera:
         self.sd_sub_B = 1
         self.sub_colors = 'No values yet.'
 
-        def _onselect(eclick, erelease):
-            
+        def _onselect(eclick, erelease):  
             x1, y1 = eclick.xdata, eclick.ydata
             x2, y2 = erelease.xdata, erelease.ydata
 
             selected_area = self.image[int(y1):int(y2), int(x1):int(x2)]
             
+            # calculate mean color value of each channel
             mean_red = np.mean(selected_area[:, :, 0])
             mean_green = np.mean(selected_area[:, :, 1])
             mean_blue = np.mean(selected_area[:, :, 2])
@@ -348,24 +353,26 @@ class LucidCamera:
                 self.sd_sub_B = std_blue
                 self.sub_colors = f'({mean_red:.2f}+-{std_red:.2f}, {mean_green:.2f}+-{std_green:.2f}, {mean_blue:.2f}+-{std_blue:.2f})'
 
+            # calculate color contrast
             self.contrast_R = (self.hbn_R-self.sub_R)/self.sub_R
             self.sd_contrast_R = np.sqrt((self.sd_hbn_R/self.sub_R)**2+(self.sd_sub_R*self.hbn_R/self.sub_R**2)**2)
             self.contrast_G = (self.hbn_G-self.sub_G)/self.sub_G
             self.sd_contrast_G = np.sqrt((self.sd_hbn_G/self.sub_G)**2+(self.sd_sub_G*self.hbn_G/self.sub_G**2)**2)
             self.contrast_B = (self.hbn_B-self.sub_B)/self.sub_B
             self.sd_contrast_B = np.sqrt((self.sd_hbn_B/self.sub_B)**2+(self.sd_sub_B*self.hbn_B/self.sub_B**2)**2)
+
+            # print results
             print('hBN RGB: '+self.hbn_colors)
             print('Substrate RGB: '+self.sub_colors+'\n')
             print(f'Contrast_R : {self.contrast_R:.2f}+-{self.sd_contrast_R:.2f}')
             print(f'Contrast_G : {self.contrast_G:.2f}+-{self.sd_contrast_G:.2f}')
             print(f'Contrast_B : {self.contrast_B:.2f}+-{self.sd_contrast_B:.2f}\n')
 
+        # connect and setu up callback functions
         fig.canvas.mpl_connect('key_press_event', _toggle_selector)
         fig.canvas.mpl_connect('key_press_event', _switch_off)
-
         props_hbn = dict(facecolor='blue', alpha=0.5)
         props_sub = dict(facecolor='green', alpha=0.5)
-
         rect_hbn = mwidgets.RectangleSelector(ax, _onselect, interactive=True, props=props_hbn)
         rect_sub = mwidgets.RectangleSelector(ax, _onselect, interactive=True, props=props_sub)
         rect_hbn.set_active(True)
@@ -376,14 +383,16 @@ class LucidCamera:
 
         plt.show()
 
+        # after finalising evaluation, save/discard data
         print('Do you want to save the contrast values and plot?')
         print('Type \'y\' to save')
         print('Type \'n\' to discard\n')
 
         timestamp = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')+'_N'
-        folder = 'C:/Users/Felix Begemann/Bachelorarbeit/measurements/Nikon'
+        folder = self.path_results_folder
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
         
+        # part for interacting with the program in the terminal
         for entry1 in sys.stdin:
             if 'y' == entry1.rstrip():
                 print('\nDo you want extra description?')
@@ -419,9 +428,9 @@ class LucidCamera:
         print('\nProgram finished.\n')
 
 
-
-Camera = LucidCamera()
-stream = 1 # True for streaming, False for opening old image
+# choose what part of the program you want to use here
+stream = 0 # True for streaming, False for opening old image
+Camera = LucidCamera(stream=stream)
 
 if stream:
     boolean = True # will be set to False when 'b' is pressed in Snap()-view
