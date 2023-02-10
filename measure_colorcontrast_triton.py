@@ -166,7 +166,7 @@ class LucidCamera:
 
         # control panel of exposure time
         expo_min = 1500
-        expo_max = 10000
+        expo_max = 3000
 
 
         def _set_exposure_time(val: float):
@@ -192,7 +192,7 @@ class LucidCamera:
         print('Choose magnification with keys: \'1\', \'2\', \'3\', \'4\' or \'5\'.\n')
         with self.device.start_stream():
             while True:
-                curr_frame_time = time.time() # Used to display FPS on stream
+                curr_frame_time = time.time() # used to display FPS on stream
                 
                 # get image from camera
                 buffer = self.device.get_buffer()
@@ -320,6 +320,7 @@ class LucidCamera:
         self.sub_B = 1
         self.sd_sub_B = 1
         self.sub_colors = 'No values yet.'
+        self.sys_drs = 0.07 # systematic error of drs measurement
 
         def _onselect(eclick, erelease):  
             x1, y1 = eclick.xdata, eclick.ydata
@@ -331,9 +332,9 @@ class LucidCamera:
             mean_red = np.mean(selected_area[:, :, 0])
             mean_green = np.mean(selected_area[:, :, 1])
             mean_blue = np.mean(selected_area[:, :, 2])
-            std_red = np.std(selected_area[:, :, 0])
-            std_green = np.std(selected_area[:, :, 1])
-            std_blue = np.std(selected_area[:, :, 2])
+            std_red = np.sqrt(np.std(selected_area[:, :, 0])**2+self.sys_drs**2)
+            std_green = np.sqrt(np.std(selected_area[:, :, 1])**2+self.sys_drs**2)
+            std_blue = np.sqrt(np.std(selected_area[:, :, 2])**2+self.sys_drs**2)
             
             if self.hbn:
                 self.hbn_R = mean_red
