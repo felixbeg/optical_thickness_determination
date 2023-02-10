@@ -19,12 +19,14 @@ from scipy.signal import find_peaks
 
 path_fit_parameters = 'C:/Users/Felix Begemann/Bachelorarbeit/programs/final_folder/calibrated_fitparameters_odr/'
 
+# parameters for image correction can be added in the terminal as postional argument
 parser = argparse.ArgumentParser(description='Stream camera, take snapshot and evaluate color of hBN and substrate.')
 parser.add_argument('-a', '--gain', nargs=1, type=float, metavar='alpha', help='Gain in dB') # this is not in dB yet
 parser.add_argument('-b', '--bias', nargs=1, type=float, metavar='beta', help='Bias')
 parser.add_argument('-g', '--gamma', nargs=1, type=float, metavar='gamma', help='Gamma Correction')
 args = parser.parse_args()
 
+# parameters for immage correction
 if args.gain:
     alpha = args.gain[0]
 else:
@@ -78,10 +80,10 @@ dx_obj10 = 0.6513586780443329 # µm
 dx_obj20 = 0.3232413688296831 # µm
 dx_obj50 = 0.129080422000821 # µm
 dx_obj100 = 0.06401050835553976 # µm
-pixel_widhts = np.array([dx_obj100, dx_obj50, dx_obj20, dx_obj10, dx_obj5])
+pixel_widths = np.array([dx_obj100, dx_obj50, dx_obj20, dx_obj10, dx_obj5])
 objective = [100, 50, 20, 10, 5]
 scales = np.array([20, 30, 30, 100, 400]) 
-lengths = scales/pixel_widhts
+lengths = scales/pixel_widths
 linewidth = 2
 start_point = 20
 end_points = lengths+start_point-linewidth/2
@@ -141,7 +143,7 @@ class LucidCamera():
         if args.gamma:
             self.gamma = args.gamma[0]
         self.stream = stream
-        self.path_results_folder = 'C:/Users/Felix Begemann/Bachelorarbeit/measurements/final_results'
+        self.path_results_folder = './measurements'
 
 
     # create device, waits 20 seconds for device to be connected
@@ -213,7 +215,7 @@ class LucidCamera():
         num_channels = 3 # depends on pixel format, for RGB -> 3
 
         # control panel of exposure time
-        expo_min = 1000
+        expo_min = 1500
         expo_max = 3000
 
 
@@ -235,15 +237,15 @@ class LucidCamera():
 
         prev_frame_time = 0
         curr_frame_time = 0
-        mag = 1
+        self.mag = 1
         print('\nStream started.\n')
         print('Choose magnification with keys: \'1\', \'2\', \'3\', \'4\' or \'5\'.\n')
         with self.device.start_stream():
             while True:
-                # Used to display FPS on stream
-                curr_frame_time = time.time()
+                curr_frame_time = time.time() # used to display FPS on stream
+                
+                # get image from camera
                 buffer = self.device.get_buffer()
-
                 item = BufferFactory.copy(buffer)
                 self.device.requeue_buffer(buffer)
                 buffer_bytes_per_pixel = int(len(item.data)/(item.width * item.height))
@@ -251,48 +253,50 @@ class LucidCamera():
                 npndarray = np.ndarray(buffer=array, dtype=np.uint8, shape=(item.height, item.width, buffer_bytes_per_pixel))
                 self.image = np.copy(npndarray)
 
-                # image correction, not useful for thickness determination
+                # image correction
                 if args.gamma:
                     npndarray = gamma_correct(npndarray)
-
                 if args.gain or args.bias:
                     npndarray = adjust_contrast(npndarray)
 
+                # text to put on broadcasted image
                 max_R = np.amax(npndarray[:, :, 0])
                 max_G = np.amax(npndarray[:, :, 1])
                 max_B = np.amax(npndarray[:, :, 2])
-                npndarray = cv2.cvtColor(npndarray, cv2.COLOR_RGB2BGR)
+                npndarray = cv2.cvtColor(npndarray, cv2.COLOR_RGB2BGR) # convert for image to be shown correctly in cv2
                 fps = f'FPS: {1/(curr_frame_time-prev_frame_time):.1f}'
                 max = f'Max. (R, G, B): ({max_R:.0f}, {max_G:.0f}, {max_B:.0f})'
-                string = f'{scales[mag-1]} um ({10*objective[mag-1]}x magnification)'
-                cv2.rectangle(npndarray, (start_point, 20), (int(end_points[mag-1]), 20), (100, 255, 0), linewidth)
+                string = f'{scales[self.mag-1]} um ({10*objective[self.mag-1]}x magnification)'
+                cv2.rectangle(npndarray, (start_point, 20), (int(end_points[self.mag-1]), 20), (100, 255, 0), linewidth)
                 cv2.rectangle(npndarray, (start_point, 15), (start_point, 25), (100, 255, 0), linewidth)
-                cv2.rectangle(npndarray, (int(end_points[mag-1]), 15), (int(end_points[mag-1]), 25), (100, 255, 0), linewidth)
+                cv2.rectangle(npndarray, (int(end_points[self.mag-1]), 15), (int(end_points[self.mag-1]), 25), (100, 255, 0), linewidth)
                 cv2.putText(npndarray, string, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv2.LINE_AA)
                 cv2.putText(npndarray, max, (10, 660), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv2.LINE_AA)
                 cv2.putText(npndarray, fps, (10, 700), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv2.LINE_AA)
+                
+                # show image
                 cv2.imshow('Camera currently streaming, press \'s\'-key to stop stream/take snapshot.', npndarray)
 
+                # clean up
                 BufferFactory.destroy(item)
-
                 prev_frame_time = curr_frame_time
 
                 # Break if s-key (snapshot) is pressed
                 key = cv2.waitKey(1)
                 if key == ord('1'):
-                    mag = 1
+                    self.mag = 1
                     npndarray = np.copy(self.image)
                 if key == ord('2'):
-                    mag = 2
+                    self.mag = 2
                     npndarray = np.copy(self.image)
                 if key == ord('3'):
-                    mag = 3
+                    self.mag = 3
                     npndarray = np.copy(self.image)
                 if key == ord('4'):
-                    mag = 4
+                    self.mag = 4
                     npndarray = np.copy(self.image)
                 if key == ord('5'):
-                    mag = 5
+                    self.mag = 5
                     npndarray = np.copy(self.image)
                 if key == 115:
                     break
@@ -313,11 +317,13 @@ class LucidCamera():
         # get last image of stream
         print("\nTaking snapshot.\n")
 
-        # what follows is the part for evaluation
-        print('Scalebar only valid for 1000x magnification.')
+        # set up plot
         print('To break streaming-/snapping-loop, press \'b\'-key.')
         fig, ax = plt.subplots()
-        scalebar = ScaleBar(0.06401050835553976, 'um', frameon=1)
+        if self.stream:
+            scalebar = ScaleBar(pixel_widths[self.mag-1], 'um', frameon=1) 
+        else:
+            scalebar = ScaleBar(pixel_widths[0], 'um', frameon=1) 
         ax.add_artist(scalebar)
         ax.set_title('Select rectangles for color contrast.\n Blue = hBN, green = substrate.')
         ax.imshow(self.image)
@@ -345,7 +351,6 @@ class LucidCamera():
                     
                     rect_hbn.set_active(False)
                     rect_sub.set_active(True)
-
                     self.hbn = False
                 else:
                     print(f'\n{name} for hBN activated.')
@@ -353,10 +358,10 @@ class LucidCamera():
                     
                     rect_hbn.set_active(True)
                     rect_sub.set_active(False)
-
                     self.hbn = True
             
 
+        # callback function for rectangles
         self.hbn = True
         self.sub_R = 1 # to prevent attribute error on first click, initialize with arbitrary numbers
         self.sd_sub_R = 1
@@ -372,18 +377,18 @@ class LucidCamera():
 
         # callback function for rectangles
         def _onselect(eclick, erelease):
-            
             x1, y1 = eclick.xdata, eclick.ydata
             x2, y2 = erelease.xdata, erelease.ydata
 
             selected_area = self.image[int(y1):int(y2), int(x1):int(x2)]
             
+            # calculate mean color value of each channel
             mean_red = np.mean(selected_area[:, :, 0])
             mean_green = np.mean(selected_area[:, :, 1])
             mean_blue = np.mean(selected_area[:, :, 2])
-            std_red = np.std(selected_area[:, :, 0])+self.sys_drs
-            std_green = np.std(selected_area[:, :, 1])+self.sys_drs
-            std_blue = np.std(selected_area[:, :, 2])+self.sys_drs
+            std_red = np.sqrt(np.std(selected_area[:, :, 0])**2+self.sys_drs**2)
+            std_green = np.sqrt(np.std(selected_area[:, :, 1])**2+self.sys_drs**2)
+            std_blue = np.sqrt(np.std(selected_area[:, :, 2])**2+self.sys_drs**2)
             
             if self.hbn:
                 self.hbn_R = mean_red
@@ -402,6 +407,7 @@ class LucidCamera():
                 self.sd_sub_B = std_blue
                 self.sub_colors = f'({mean_red:.2f}+-{std_red:.2f}, {mean_green:.2f}+-{std_green:.2f}, {mean_blue:.2f}+-{std_blue:.2f})'
 
+            # calculate color contrast
             self.contrast_R = (self.hbn_R-self.sub_R)/self.sub_R
             self.sd_contrast_R = np.sqrt((self.sd_hbn_R/self.sub_R)**2+(self.sd_sub_R*self.hbn_R/self.sub_R**2)**2)
             self.contrast_G = (self.hbn_G-self.sub_G)/self.sub_G
@@ -431,6 +437,7 @@ class LucidCamera():
                 maximum_thickness.append(xvalues[tmp[-1]])
             self.sd_probable_thickness = abs(np.asarray(minimum_thickness)-np.asarray(maximum_thickness))/2
 
+            # print results
             print('hBN RGB: '+self.hbn_colors)
             print('Substrate RGB: '+self.sub_colors+'\n')
             print(f'Contrast_R : {self.contrast_R:.2f}+-{self.sd_contrast_R:.2f}')
@@ -441,12 +448,11 @@ class LucidCamera():
                 print(f'    ({self.probable_thickness[element]:.2f}+-{self.sd_probable_thickness[element]:.2f}) nm; deviation from model: {self.probable_deviation[element]:.2f}+-{self.sd_probable_deviation[element]:.2f}')
 
 
+        # connect and setu up callback functions
         fig.canvas.mpl_connect('key_press_event', _toggle_selector)
         fig.canvas.mpl_connect('key_press_event', _switch_off)
-
         props_hbn = dict(facecolor='blue', alpha=0.5)
         props_sub = dict(facecolor='green', alpha=0.5)
-
         rect_hbn = mwidgets.RectangleSelector(ax, _onselect, interactive=True, props=props_hbn)
         rect_sub = mwidgets.RectangleSelector(ax, _onselect, interactive=True, props=props_sub)
         rect_hbn.set_active(True)
@@ -483,6 +489,7 @@ class LucidCamera():
         folder = self.path_results_folder
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
         
+        # part for interacting with the program in the terminal
         for entry1 in sys.stdin:
             if 'y' == entry1.rstrip():
                 print('\nDo you want extra description?')
