@@ -14,10 +14,7 @@ class AFM:
         self.filename = self.directory_name.split('/')[-1]+' Z C text'
         self.file = open(f'{self.directory_name}/{self.filename}', 'r')
  
-        text = []
-
-        for line in self.file:
-            text.append(line)
+        text = [line for line in self.file]
 
         # getting parameters of afm scan
         xwidth = float(text[1].split(' ')[2])
@@ -109,7 +106,6 @@ class AFM:
 
         # this function is needed to interact with the plot, e.g. drawing the rectangles
         def onselect(eclick, erelease):
-            
             x1, y1 = eclick.xdata, eclick.ydata
             x2, y2 = erelease.xdata, erelease.ydata
             selected_area = self.image[int(y1):int(y2), int(x1):int(x2)]
@@ -124,18 +120,19 @@ class AFM:
                 self.sub_height = mu_height
                 self.std_sub_height = sigma_height
 
+            # calculate thickness
             self.thickness = self.hbn_height - self.sub_height
             self.std_thickness = np.sqrt(self.std_hbn_height**2+self.std_sub_height**2)
             
+            # print result
             print(f'\nHeight of hBN: ({self.hbn_height:.2f}+-{self.std_hbn_height:.2f}) {zunit}')
             print(f'Height of substrate: ({self.sub_height:.2f}+-{self.std_sub_height:.2f}) {zunit}')
             print(f'Thickness of hBN-flake: ({self.thickness:.2f}+-{self.std_thickness:.2f}) {zunit}\n')
 
+        # connect callback functions
         fig.canvas.mpl_connect('key_press_event', toggle_selector)
-
         props_hbn = dict(facecolor='blue', alpha=0.5)
         props_sub = dict(facecolor='green', alpha=0.5)
-
         rect_hbn = mwidgets.RectangleSelector(ax, onselect, interactive=True, props=props_hbn)
         rect_sub = mwidgets.RectangleSelector(ax, onselect, interactive=True, props=props_sub)
         rect_hbn.set_active(True)
@@ -148,9 +145,10 @@ class AFM:
         print('Type \'n\' to discard\n')
 
         timestamp = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')+'_A'
-        folder = 'C:/Users/Felix Begemann/Bachelorarbeit/measurements/AFM'
+        folder = './measurements'
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
         
+        # interact with program in terminal
         for entry1 in sys.stdin:
             if 'y' == entry1.rstrip():
                 print('\nDo you want extra description?')
