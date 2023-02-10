@@ -12,11 +12,10 @@ class AFM:
     def __init__(self):
         self.directory_name = fd.askdirectory()
         self.filename = self.directory_name.split('/')[-1]+' Z C text'
+        
+        # opwning afm file for parameters of scan
         self.file = open(f'{self.directory_name}/{self.filename}', 'r')
- 
         text = [line for line in self.file]
-
-        # getting parameters of afm scan
         xwidth = float(text[1].split(' ')[2])
         ywidth = float(text[2].split(' ')[2])
         xunit = text[1].split(' ')[3]
@@ -25,7 +24,6 @@ class AFM:
         yunit = yunit.strip('Â')
         # zunit = text[3].split(' ')[3]
         zunit = 'nm' # z data is multiplied with 10^9
-        
         self.file.close()
 
         file = open(f'{self.directory_name}/{self.filename}', 'r')
